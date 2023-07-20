@@ -1,0 +1,730 @@
+BKG:	EQU	%00000000
+PLYR:	EQU	%01111000
+BORDER:	EQU	%01111000
+BALL:	EQU	%01101000
+SPLIT:	EQU	%00111000
+GOAL:	EQU	%00101000
+
+	ORG	32768
+
+RESTART:
+	CALL	DRAW_BOARD
+LOOP_R:	LD	BC,$7FFE
+	IN	A,(C)
+	BIT	0,A
+	JP	Z,MAIN_LOOP
+	JP	LOOP_R
+
+MAIN_LOOP:
+	HALT
+	HALT
+	HALT
+
+	LD	DE,(ANGLE)
+	
+	;Checks if goal is touched
+
+	LD	HL,(B_POS)
+	ADD	HL,DE	
+	LD	A,(HL)	
+	LD	HL,(B_POS)
+	CP	GOAL	
+	JP	Z,END_GAME
+
+	;Checks if border is touched
+
+	LD	HL,(B_POS)	;Is border right
+	INC	HL
+	LD	A,(HL)
+	LD	HL,(B_POS)
+	CP	BORDER
+	CALL	Z,CALC_ANGLE
+	
+	LD	HL,(B_POS)	;Is border wrong (left)
+	DEC	HL
+	LD	A,(HL)
+	LD	HL,(B_POS)
+	CP	BORDER
+	CALL	Z,CALC_ANGLE
+
+	ADD	HL,DE		;Is border in direction
+	LD	A,(HL)	
+	LD	HL,(B_POS)
+	CP	BORDER	
+	CALL	Z,CALC_ANGLE
+
+	;Angle changes when touch
+	
+	LD	A,(PREV)
+	LD	(HL),A
+	ADD	HL,DE
+	LD	A,(HL)
+	CP	%01111000
+	JP	Z,NO_ADD
+	LD	(PREV),A
+NO_ADD:	
+	LD	(HL),BALL
+	LD	(B_POS),HL
+
+
+	LD	BC,$FDFE
+	IN	A,(C)
+	BIT	0,A
+	CALL	Z,MOVE_UP1
+	BIT	1,A
+	CALL	Z,MOVE_DOWN1
+	LD	BC,$BFFE
+	IN	A,(C)
+	BIT	2,A
+	CALL	Z,MOVE_UP2
+	BIT	1,A
+	CALL	Z,MOVE_DOWN2
+	BIT	0,A
+	JP	Z,STOP
+
+	JP	MAIN_LOOP
+
+END_GAME:
+	CALL	DRAW_END_SCREEN
+	LD	A,100
+LOOP_HALT:
+	HALT
+	DEC	A
+	JP	NZ,LOOP_HALT
+
+	LD	HL,(B_START_POS)
+	LD	A,L
+	CP	%01100100
+	JP	Z,SWITCH_TO_P2
+	JP	SWITCH_TO_P1
+SWITCH_TO_P2:
+	LD	HL,22907
+	LD	(B_START_POS),HL
+	LD	DE,-32
+	LD	(ANGLE),DE
+	
+	JP	RESTART
+SWITCH_TO_P1:
+	LD	HL,22884
+	LD	(B_START_POS),HL
+	LD	DE,-31
+	LD	(ANGLE),DE
+
+	JP	RESTART
+
+STOP:
+
+	RET
+
+
+;-----------------------------------------------------------------------
+; DRAWING BOARD
+;-----------------------------------------------------------------------
+DRAW_BOARD:			;Places vertical and horizontal lines
+	PUSH	HL
+	PUSH	AF
+	PUSH	DE
+
+	LD	HL,0
+	LD	(ANGLE),HL
+	LD	A,%00101000
+	LD	(GOAL1),A
+	CALL	DRAW_BACKGROUND	;Colours the background
+	LD	HL,22528
+	CALL	DRAW_VERTICAL	;Places left goal
+	LD	HL,22529
+	CALL	DRAW_HORIZONTAL	;Places upper border
+	LD	HL,22559
+	CALL	DRAW_VERTICAL	;Places right goal
+	LD	HL,23201
+	CALL	DRAW_HORIZONTAL	;Places lower border
+	LD	HL,22575
+	CALL	DRAW_SPEC_VER	;Divides table in two
+	LD	HL,22883	;Position of first player, middle left
+	LD	(P1_POS),HL
+	CALL	PLACE_PLAYER
+	LD	HL,22908	;Position of second player, middle right
+	LD	(P2_POS),HL
+	CALL	PLACE_PLAYER
+	LD	HL,(B_START_POS)
+	LD	(B_POS),HL
+	CALL	PLACE_BALL
+
+	POP	DE
+	POP	AF
+	POP	HL
+	RET
+
+;-----------------------------------------------------------------------
+; DRAWING END SCREEN
+;-----------------------------------------------------------------------
+DRAW_END_SCREEN:
+	PUSH	HL
+	PUSH	AF
+	PUSH	BC
+	PUSH	DE
+
+	LD	A,%10101011
+	LD	(GOAL1),A
+	LD	HL,22528
+	CALL	DRAW_VERTICAL	;Places left goal
+	LD	HL,22559
+	CALL	DRAW_VERTICAL	;Places right goal
+	LD	A,%00101000
+	LD	(GOAL1),A
+	
+	POP	DE
+	POP	BC
+	POP	AF
+	POP	HL
+
+	RET
+
+;-----------------------------------------------------------------------
+; DRAWING BACKGROUND
+;-----------------------------------------------------------------------
+DRAW_BACKGROUND:
+	PUSH	HL
+	PUSH	AF
+	PUSH	BC
+	PUSH	DE
+
+	LD	HL,22528
+	LD	A,BKG
+	LD	C,22
+NEXT:	LD	B,32
+LOOP_BACKGROUND:
+	LD	(HL),A
+	INC	HL
+
+	DEC	B
+	JP	NZ,LOOP_BACKGROUND
+
+	DEC	C
+	JP	NZ,NEXT
+
+	POP	DE
+	POP	BC
+	POP	AF
+	POP	HL
+
+	RET
+
+;-----------------------------------------------------------------------
+; DRAWING GOALS
+;-----------------------------------------------------------------------
+DRAW_VERTICAL:
+	PUSH	HL
+	PUSH	AF
+	PUSH	BC
+	PUSH	DE
+
+	LD	B,22
+	LD	DE,32
+	LD	A,(GOAL1)
+LOOP_VERTICAL:
+	LD	(HL),A
+	ADD	HL,DE
+	DEC	B
+	
+	JP	NZ,LOOP_VERTICAL
+
+	POP	DE
+	POP	BC
+	POP	AF
+	POP	HL
+
+	RET
+
+;-----------------------------------------------------------------------
+; DIVIDING BOARD
+;-----------------------------------------------------------------------
+DRAW_SPEC_VER:
+	PUSH	HL
+	PUSH	AF
+	PUSH	BC
+	PUSH	DE
+
+	LD	B,10
+	LD	DE,64
+	LD	A,SPLIT
+LOOP_SPEC_VER:
+	LD	(HL),A
+	ADD	HL,DE
+	DEC	B
+
+	JP	NZ,LOOP_SPEC_VER
+
+	POP	DE
+	POP	BC
+	POP	AF
+	POP	HL
+
+	RET
+
+;-----------------------------------------------------------------------
+; DRAWING BORDERS
+;-----------------------------------------------------------------------
+DRAW_HORIZONTAL:
+	PUSH	HL
+	PUSH	AF
+	PUSH	BC
+	PUSH	DE
+
+	LD	B,30
+	LD	A,BORDER
+LOOP_HORIZONTAL:
+	LD	(HL),A
+	INC	HL
+	DEC	B
+	
+	JP	NZ,LOOP_HORIZONTAL
+
+	POP	DE
+	POP	BC
+	POP	AF
+	POP	HL
+
+	RET
+
+;-----------------------------------------------------------------------
+; PLACING PLAYERS
+;-----------------------------------------------------------------------
+PLACE_PLAYER:
+	PUSH	HL
+	PUSH	AF
+	PUSH	BC
+	PUSH	DE
+	
+	;LD	(PL_POS),HL
+	LD	A,PLYR
+	LD	DE,-32
+	LD	(HL),A
+	ADD	HL,DE
+	LD	(HL),A
+	ADD	HL,DE
+	LD	(HL),A
+	LD	DE,32
+	ADD	HL,DE
+	ADD	HL,DE
+	ADD	HL,DE
+	LD	(HL),A
+	ADD	HL,DE
+	LD	(HL),A	
+
+	POP	DE
+	POP	BC
+	POP	AF
+	POP	HL
+	RET
+
+;-----------------------------------------------------------------------
+; PLACING BALL
+;-----------------------------------------------------------------------
+PLACE_BALL:
+	PUSH	HL
+	PUSH	AF
+
+	LD	A,BALL
+	LD	(HL),A
+
+	POP	AF
+	POP	HL
+
+	RET
+	
+;-----------------------------------------------------------------------
+; CALCULATING REFLECTING ANGLE !!! BUGGY AND NOT ACCURATE :( !!!
+;-----------------------------------------------------------------------
+CALC_ANGLE:
+	PUSH	HL
+	PUSH	AF
+	PUSH	BC
+
+	LD	DE,(ANGLE)
+	
+	LD	BC,-32	;Checks if white colour is above
+	ADD	HL,BC
+	LD	A,(HL)
+	CP	BORDER
+	JP	Z,ABOVE_UNDER
+
+	LD	BC,64	;Checks if under
+	ADD	HL,BC
+	LD	A,(HL)
+	CP	BORDER
+	JP	Z,ABOVE_UNDER
+
+	LD	BC,-33	;Checks if left
+	ADD	HL,BC
+	LD	A,(HL)
+	CP	BORDER
+	JP	Z,LEFT_RIGHT
+
+	LD	BC,2	;Checks if right
+	ADD	HL,BC
+	LD	A,(HL)
+	CP	BORDER
+	JP	Z,LEFT_RIGHT
+
+	;If neither, then diagonal
+	JP	DIAGONAL
+
+ABOVE_UNDER:
+	LD	DE,(ANGLE)
+	BIT	7,D
+	JP	NZ,NO_NEG_AB
+	JP 	DO_NEG_AB
+NO_NEG_AB:
+	LD	A,E
+	CP	%11011111	;-33 becomes 31
+	JP	Z,NNA_OPTION1
+	CP	%11100001	;-31 becomes 33
+	JP	Z,NNA_OPTION2
+NNA_OPTION1:	
+	LD	DE,31
+	JP	RETURN_ANGLE
+NNA_OPTION2:
+	LD	DE,33
+	JP	RETURN_ANGLE
+
+DO_NEG_AB:
+	LD	A,E
+	CP	%00011111	;31 becomes -33
+	JP	Z,DNA_OPTION2
+	CP	%00100001	;33 becomes -31
+	JP	Z,DNA_OPTION1
+
+DNA_OPTION1:
+	LD	DE,-31
+	JP	RETURN_ANGLE
+DNA_OPTION2:
+	LD	DE,-33
+	JP	RETURN_ANGLE
+
+LEFT_RIGHT:
+	LD	DE,(ANGLE)
+	BIT	7,D
+	JP	NZ,DO_NEG_L
+	JP	NO_NEG_L
+NO_NEG_L:
+	LD	A,E
+	CP	%00011111	;31 becomes 33
+	JP	Z,NNA_OPTION2
+	CP	%00100001	;33 becomes 31
+	JP	Z,NNA_OPTION1
+
+DO_NEG_L:
+	LD	A,E
+	CP	%11011111	;-33 becomes -31
+	JP	Z,DNA_OPTION1
+	CP	%11100001	;-31 becomes -33
+	JP	Z,DNA_OPTION2
+
+LEFT:
+	LD	DE,-31
+	JP	RETURN_ANGLE
+
+RIGHT:
+	LD	DE,31
+	JP	RETURN_ANGLE
+
+DIAGONAL:
+	LD	DE,(ANGLE)
+	BIT	7,D
+	JP	NZ,NO_NEG_DI
+	JP 	DO_NEG_DI
+NO_NEG_DI:
+	LD	A,E
+	CP	%11011111	;-33 becomes 33
+	JP	Z,NNA_OPTION2
+	CP	%11100001	;-31 becomes 31
+	JP	Z,NNA_OPTION1
+DO_NEG_DI:
+	LD	A,E
+	CP	%00100001	;33 becomes -33
+	JP	Z,DNA_OPTION2
+	CP	%00011111	;31 becomes -31
+	JP	Z,DNA_OPTION1
+
+RETURN_ANGLE:
+	LD	(ANGLE),DE
+
+	POP	BC
+	POP	AF
+	POP	HL
+
+	RET
+
+;-----------------------------------------------------------------------
+; MOVING PLAYER1 UP
+;-----------------------------------------------------------------------
+MOVE_UP1:
+	PUSH	AF
+	PUSH	BC
+	PUSH	DE
+	PUSH	HL
+
+	LD	BC,-32
+	
+	;Does it touch board
+	LD	HL,(P1_POS)
+	ADD	HL,BC
+	ADD	HL,BC
+	ADD	HL,BC
+	LD	A,(HL)	
+	LD	HL,(P1_POS)
+	CP	BKG
+	JP	NZ,MU_EXIT1	
+
+	;If touches board, move
+	;We move players by removing the lowest pixel and adding it above
+	LD	BC,32
+	ADD	HL,BC
+	ADD	HL,BC
+	LD	(HL),BKG
+	LD	BC,-32
+	ADD	HL,BC
+	ADD	HL,BC
+	ADD	HL,BC
+	ADD	HL,BC
+	ADD	HL,BC
+	LD	(HL),PLYR
+	LD	BC,32
+	ADD	HL,BC
+	ADD	HL,BC
+	LD	(P1_POS),HL
+MU_EXIT1:
+	POP	HL
+	POP	DE
+	POP	BC
+	POP	AF
+
+	RET
+
+;-----------------------------------------------------------------------
+; MOVING PLAYER1 DOWN
+;-----------------------------------------------------------------------
+MOVE_DOWN1:
+	PUSH	AF
+	PUSH	BC
+	PUSH	DE
+	PUSH	HL
+
+	LD	BC,32
+	
+	;Pattern repeats as above
+	LD	HL,(P1_POS)
+	ADD	HL,BC
+	ADD	HL,BC
+	ADD	HL,BC
+	LD	A,(HL)	
+	LD	HL,(P1_POS)
+	CP	BKG
+	JP	NZ,MD_EXIT1
+
+	
+	LD	BC,-32
+	ADD	HL,BC
+	ADD	HL,BC
+	LD	(HL),BKG
+	LD	BC,32
+	ADD	HL,BC
+	ADD	HL,BC
+	ADD	HL,BC
+	ADD	HL,BC
+	ADD	HL,BC
+	LD	(HL),PLYR
+	LD	BC,-32
+	ADD	HL,BC
+	ADD	HL,BC
+	LD	(P1_POS),HL
+MD_EXIT1:
+	POP	HL
+	POP	DE
+	POP	BC
+	POP	AF
+
+	RET
+
+;-----------------------------------------------------------------------
+; MOVING PLAYER2 UP
+;-----------------------------------------------------------------------
+MOVE_UP2:
+	PUSH	AF
+	PUSH	BC
+	PUSH	DE
+	PUSH	HL
+
+	LD	BC,-32
+	
+	
+	LD	HL,(P2_POS)
+	ADD	HL,BC
+	ADD	HL,BC
+	ADD	HL,BC
+	LD	A,(HL)		
+	LD	HL,(P2_POS)
+	CP	BKG
+	JP	NZ,MU_EXIT2	
+
+	
+	LD	BC,32
+	ADD	HL,BC
+	ADD	HL,BC
+	LD	(HL),BKG
+	LD	BC,-32
+	ADD	HL,BC
+	ADD	HL,BC
+	ADD	HL,BC
+	ADD	HL,BC
+	ADD	HL,BC
+	LD	(HL),PLYR
+	LD	BC,32
+	ADD	HL,BC
+	ADD	HL,BC
+	LD	(P2_POS),HL
+MU_EXIT2:
+	POP	HL
+	POP	DE
+	POP	BC
+	POP	AF
+
+	RET
+
+;-----------------------------------------------------------------------
+; MOVING PLAYER2 DOWN
+;-----------------------------------------------------------------------
+MOVE_DOWN2:
+	PUSH	AF
+	PUSH	BC
+	PUSH	DE
+	PUSH	HL
+
+	LD	BC,32
+	
+	
+	LD	HL,(P2_POS)
+	ADD	HL,BC
+	ADD	HL,BC
+	ADD	HL,BC
+	LD	A,(HL)		
+	LD	HL,(P2_POS)
+	CP	BKG
+	JP	NZ,MD_EXIT2	
+
+	
+	LD	BC,-32
+	ADD	HL,BC
+	ADD	HL,BC
+	LD	(HL),BKG
+	LD	BC,32
+	ADD	HL,BC
+	ADD	HL,BC
+	ADD	HL,BC
+	ADD	HL,BC
+	ADD	HL,BC
+	LD	(HL),PLYR
+	LD	BC,-32
+	ADD	HL,BC
+	ADD	HL,BC
+	LD	(P2_POS),HL
+MD_EXIT2:
+	POP	HL
+	POP	DE
+	POP	BC
+	POP	AF
+
+	RET
+
+;-----------------------------------------------------------------------
+; VARIABLES
+;-----------------------------------------------------------------------
+
+P1_POS: DEFW	0
+P2_POS:	DEFW	0
+B_POS:	DEFW	0
+B_START_POS:	DEFW	22884
+ANGLE:	DEFW	0
+PREV:	DEFB	0
+GOAL1:	DEFB	0
+
+POINTS_L:		;3x5
+	DEFW	22598
+	DEFB	%00000000, %00000000, %00000000
+	DEFB	%00000000, %00000000, %00000000
+	DEFB	%00000000, %00000000, %00000000
+	DEFB	%00000000, %00000000, %00000000
+	DEFB	%00000000, %00000000, %00000000
+
+	DEFW	22598
+	DEFB	%00111000, %00111000, %00111000
+	DEFB	%00111000, %00000000, %00111000
+	DEFB	%00111000, %00000000, %00111000
+	DEFB	%00111000, %00000000, %00111000
+	DEFB	%00111000, %00111000, %00111000
+
+	DEFW	22598
+	DEFB	%00000000, %00111000, %00111000
+	DEFB	%00000000, %00000000, %00111000
+	DEFB	%00000000, %00000000, %00111000
+	DEFB	%00000000, %00000000, %00111000
+	DEFB	%00000000, %00000000, %00111000
+
+	DEFW	22598
+	DEFB	%00111000, %00111000, %00111000
+	DEFB	%00000000, %00000000, %00111000
+	DEFB	%00111000, %00111000, %00111000
+	DEFB	%00111000, %00000000, %00000000
+	DEFB	%00111000, %00111000, %00111000
+
+	DEFW	22598
+	DEFB	%00111000, %00111000, %00111000
+	DEFB	%00000000, %00000000, %00111000
+	DEFB	%00111000, %00111000, %00111000
+	DEFB	%00000000, %00000000, %00111000
+	DEFB	%00000000, %00000000, %00111000
+
+	DEFW	22598
+	DEFB	%00111000, %00000000, %00111000
+	DEFB	%00111000, %00000000, %00111000
+	DEFB	%00111000, %00111000, %00111000
+	DEFB	%00000000, %00000000, %00111000
+	DEFB	%00000000, %00000000, %00111000
+
+	DEFW	22598
+	DEFB	%00111000, %00111000, %00111000
+	DEFB	%00111000, %00000000, %00000000
+	DEFB	%00111000, %00111000, %00111000
+	DEFB	%00000000, %00000000, %00111000
+	DEFB	%00111000, %00111000, %00111000
+
+	DEFW	22598
+	DEFB	%00111000, %00111000, %00111000
+	DEFB	%00111000, %00000000, %00000000
+	DEFB	%00111000, %00111000, %00111000
+	DEFB	%00111000, %00000000, %00111000
+	DEFB	%00111000, %00111000, %00111000
+
+	DEFW	22598
+	DEFB	%00111000, %00111000, %00111000
+	DEFB	%00000000, %00000000, %00111000
+	DEFB	%00000000, %00000000, %00111000
+	DEFB	%00000000, %00000000, %00111000
+	DEFB	%00000000, %00000000, %00111000
+
+	DEFW	22598
+	DEFB	%00111000, %00111000, %00111000
+	DEFB	%00111000, %00000000, %00111000
+	DEFB	%00111000, %00111000, %00111000
+	DEFB	%00111000, %00000000, %00111000
+	DEFB	%00111000, %00111000, %00111000
+
+	DEFW	22598
+	DEFB	%00111000, %00111000, %00111000
+	DEFB	%00111000, %00000000, %00111000
+	DEFB	%00111000, %00111000, %00111000
+	DEFB	%00000000, %00000000, %00111000
+	DEFB	%00111000, %00111000, %00111000
+
+
